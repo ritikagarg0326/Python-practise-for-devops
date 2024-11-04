@@ -1,0 +1,132 @@
+import os
+import socket
+import subprocess
+import psutil
+import docker
+import boto3
+import schedule
+import time
+import yaml
+from git import Repo
+
+# Initialize Docker and AWS clients
+docker_client = docker.from_env()
+ec2_client = boto3.client('ec2', region_name='us-east-1')
+
+# 1. Service Health Check
+def check_and_restart_service(service_name):
+    status = subprocess.getoutput(f"systemctl is-active {service_name}")
+    if status != "active":
+        print(f"{service_name} is not running. Restarting...")
+        os.system(f"sudo systemctl restart {service_name}")
+    else:
+        print(f"{service_name} is running.")
+
+# 2. System Resource Monitoring
+def system_monitor():
+    print("CPU Usage:", psutil.cpu_percent(interval=1), "%")
+    print("Memory Usage:", psutil.virtual_memory().percent, "%")
+    print("Disk Usage:", psutil.disk_usage('/').percent, "%")
+
+# 3. Network Connectivity Test
+def is_port_open(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    result = sock.connect_ex((host, port))
+    sock.close()
+    return result == 0
+
+# 4. Docker Container Management
+def restart_container(container_name):
+    try:
+        container = docker_client.containers.get(container_name)
+        container.restart()
+        print(f"Restarted container: {container_name}")
+    except docker.errors.NotFound:
+        print(f"Container {container_name} not found.")
+
+# 5. AWS EC2 Management - List Instances
+def list_ec2_instances():
+    instances = ec2_client.describe_instances()
+    for reservation in instances['Reservations']:
+        for instance in reservation['Instances']:
+            print("Instance ID:", instance['InstanceId'], "State:", instance['State']['Name'])
+
+# 6. Run Ansible Playbook
+def run_ansible_playbook(playbook_path, inventory_path):
+    command = ["ansible-playbook", "-i", inventory_path, playbook_path]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode == 0:
+        print("Playbook ran successfully.")
+    else:
+        print("Error running playbook:", result.stderr)
+
+# 7. Git Operations - Clone Repository
+def clone_repo(repo_url, clone_dir):
+    Repo.clone_from(repo_url, clone_dir)
+    print(f"Cloned {repo_url} into {clone_dir}")
+
+# 8. Scheduled Task - Example Job
+def job():
+    print("Performing scheduled task...")
+
+# 9. Load YAML Configurations
+def load_config(yaml_file):
+    with open(yaml_file, "r") as file:
+        config = yaml.safe_load(file)
+        print(config)
+
+# 10. Disk Space Cleanup
+def clean_large_logs(directory, max_size_mb=100):
+    for root, _, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            if os.path.getsize(file_path) > max_size_mb * 1024 * 1024:
+                os.remove(file_path)
+                print(f"Removed large log file: {file_path}")
+
+# Main function to run all tasks
+def main():
+    # 1. Service Health Check
+    services = ["nginx", "mysql", "docker"]
+    for service in services:
+        check_and_restart_service(service)
+    
+    # 2. System Resource Monitoring
+    system_monitor()
+    
+    # 3. Network Connectivity Test
+    if is_port_open("8.8.8.8", 53):
+        print("Network connection to 8.8.8.8:53 is open.")
+    else:
+        print("Network connection to 8.8.8.8:53 is closed.")
+    
+    # 4. Docker Container Management
+    restart_container("my_container")
+    
+    # 5. AWS EC2 Management - List Instances
+    list_ec2_instances()
+    
+    # 6. Run Ansible Playbook
+    run_ansible_playbook("playbook.yml", "hosts")
+    
+    # 7. Git Operations
+    clone_repo("https://github.com/example/repo.git", "/tmp/myrepo")
+    
+    # 8. Schedule Task - Run every 1 minute
+    schedule.every(1).minutes.do(job)
+    
+    # 9. Load YAML Configurations
+    load_config("config.yml")
+    
+    # 10. Disk Space Cleanup
+    clean_large_logs("/var/log")
+
+    # Keep the scheduled tasks running
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+# Run the main function
+if __name__ == "__main__":
+    main()
