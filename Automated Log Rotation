@@ -1,0 +1,26 @@
+import os
+import shutil
+import datetime
+
+# Configuration
+LOG_DIR = "/var/log/myapp"
+ARCHIVE_DIR = "/var/log/myapp/archive"
+DAYS_TO_KEEP = 7
+
+# Ensure Archive Directory Exists
+if not os.path.exists(ARCHIVE_DIR):
+    os.makedirs(ARCHIVE_DIR)
+
+# Rotate Logs
+now = datetime.datetime.now()
+for filename in os.listdir(LOG_DIR):
+    file_path = os.path.join(LOG_DIR, filename)
+
+    if os.path.isfile(file_path):
+        file_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+        if (now - file_time).days > DAYS_TO_KEEP:
+            archive_path = os.path.join(ARCHIVE_DIR, f"{filename}.{now.strftime('%Y%m%d')}.gz")
+            with open(file_path, 'rb') as f_in, gzip.open(archive_path, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            os.remove(file_path)
+            print(f"Archived and removed {filename}")
