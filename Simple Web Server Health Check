@@ -1,0 +1,19 @@
+import requests
+from datetime import datetime
+
+# Configuration
+URL = "http://yourserver.com/health"
+LOG_FILE = "/var/log/health_check.log"
+
+def log_status(status):
+    with open(LOG_FILE, "a") as log_file:
+        log_file.write(f"{datetime.now()} - {status}\n")
+
+try:
+    response = requests.get(URL, timeout=5)
+    if response.status_code == 200:
+        log_status("Server is up")
+    else:
+        log_status(f"Server is down - Status Code: {response.status_code}")
+except requests.RequestException as e:
+    log_status(f"Server is down - Error: {e}")
